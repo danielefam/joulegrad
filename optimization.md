@@ -1,6 +1,6 @@
 # joulegrad performance optimization
 
-This document records the optimization work inherited from energyBANERA and
+This document records the optimization work inherited from JouleQuest and
 present in this estimator. The interpolation mathematics and units remain
 unchanged: the returned value is mJ per inference.
 
