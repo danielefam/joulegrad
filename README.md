@@ -37,8 +37,8 @@ directory of your choice, then build a separate lookup for each summary:
 
 ```bash
 python -m joulegrad.build_energy_lookup_table \
-  summaries/pi5_summary.csv \
-  --output pi5_energy_lookup.csv
+  measurements/summaries/pi5_summary.csv \
+  --output measurements/pi5_energy_lookup.csv
 ```
 
 Load it in Python with strict out-of-range behavior:
@@ -49,6 +49,25 @@ from joulegrad import EnergyLookup
 lookup = EnergyLookup("measurements/pi5_energy_lookup.csv", out_of_range="error")
 energy_mj = lookup.linear(64, 128)
 ```
+
+You can also query a lookup table directly from the terminal. Run the command
+in an environment where JouleGrad's dependencies, including PyTorch, are
+installed:
+
+```bash
+conda run -n banera_pt python -m joulegrad \
+  measurements/pi5_energy_lookup.csv \
+  linear 130 162
+```
+
+This prints the estimated energy per inference:
+
+```text
+0.128964165565 mJ/inference
+```
+
+The command supports `linear`, `conv`, and `attention` queries. Use
+`python -m joulegrad --help` to see all available arguments.
 
 Coordinates may be differentiable scalar tensors, so the result can be added
 to a loss. Missing interpolation corners and unsupported coordinates raise an
