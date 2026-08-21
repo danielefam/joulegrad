@@ -48,6 +48,7 @@ class EnergyLookup:
             raise ValueError("Lookup table contains non-positive energy values")
         self._grids = {}
         self._device_grids = {}
+        self._configuration_fallbacks = {}
         self._prepare_grids()
 
     @staticmethod
@@ -167,12 +168,49 @@ class EnergyLookup:
                 for key, grid in incomplete.items():
                     self._grids[key] = self._fill_missing_from_nearest(grid)
 
+    def _resolve_grid_key(self, key):
+        if key in self._grids:
+            return key
+        if key[0] != "conv" or self.out_of_range not in {"fallback", "warn"}:
+            return key
+
+        resolved = self._configuration_fallbacks.get(key)
+        if resolved is not None:
+            return resolved
+        candidates = sorted(candidate for candidate in self._grids if candidate[0] == "conv")
+        if not candidates:
+            return key
+        requested_configuration = tuple(float(value) for value in key[1:])
+        resolved = min(
+            candidates,
+            key=lambda candidate: (
+                sum(
+                    (float(measured) - requested) ** 2
+                    for measured, requested in zip(
+                        candidate[1:], requested_configuration
+                    )
+                ),
+                candidate,
+            ),
+        )
+        self._configuration_fallbacks[key] = resolved
+        if self.out_of_range == "warn":
+            warnings.warn(
+                "Conv configuration "
+                f"{tuple(key[1:])} is unmeasured; using nearest measured "
+                f"configuration {tuple(resolved[1:])}",
+                RuntimeWarning,
+                stacklevel=3,
+            )
+        return resolved
+
     def _grid_on_device(self, key, device):
-        grid = self._grids.get(key)
+        resolved_key = self._resolve_grid_key(key)
+        grid = self._grids.get(resolved_key)
         if grid is None:
             raise ValueError("No compatible measurements are available")
         device = torch.device(device)
-        cache_key = (key, device.type, device.index)
+        cache_key = (resolved_key, device.type, device.index)
         cached = self._device_grids.get(cache_key)
         if cached is None:
             cached = _PreparedGrid(

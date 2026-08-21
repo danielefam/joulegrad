@@ -24,6 +24,24 @@ def _write_linear_lookup(path, *, omit=None):
     pd.DataFrame(rows).to_csv(path, index=False)
 
 
+def _write_conv_lookup(path):
+    rows = []
+    for input_channels, output_channels in product((2, 4), repeat=2):
+        rows.append(
+            {
+                "layer_type": "conv",
+                "input_channels": input_channels,
+                "output_channels": output_channels,
+                "input_image_size": 8,
+                "kernel_size": 3,
+                "stride": 1,
+                "padding": 1,
+                "energy_mean_mJ": input_channels + 2 * output_channels,
+            }
+        )
+    pd.DataFrame(rows).to_csv(path, index=False)
+
+
 def test_linear_interpolation_keeps_mask_gradient(tmp_path):
     path = tmp_path / "lookup.csv"
     _write_linear_lookup(path)
@@ -97,6 +115,43 @@ def test_fallback_policy_clamps_and_fills_without_warnings(tmp_path):
 
     assert torch.isfinite(energy)
     assert input_features.grad.item() == pytest.approx(0.0)
+
+
+def test_missing_conv_configuration_fails_in_strict_mode(tmp_path):
+    path = tmp_path / "lookup.csv"
+    _write_conv_lookup(path)
+    lookup = EnergyLookup(path)
+
+    with pytest.raises(ValueError, match="No compatible measurements"):
+        lookup.conv2d(2, 4, 8, kernel_size=1, stride=2, padding=0)
+
+
+def test_warn_policy_substitutes_nearest_conv_configuration(tmp_path):
+    path = tmp_path / "lookup.csv"
+    _write_conv_lookup(path)
+    lookup = EnergyLookup(path, out_of_range="warn")
+    output_channels = torch.tensor(4.0, requires_grad=True)
+
+    with pytest.warns(RuntimeWarning, match=r"\(1, 2, 0\).*\(3, 1, 1\)"):
+        energy = lookup.conv2d(
+            2, output_channels, 15, kernel_size=1, stride=2, padding=0
+        )
+    energy.backward()
+
+    assert torch.isfinite(energy)
+    assert output_channels.grad.item() == pytest.approx(2.0)
+
+
+def test_fallback_policy_substitutes_conv_configuration_silently(tmp_path):
+    path = tmp_path / "lookup.csv"
+    _write_conv_lookup(path)
+    lookup = EnergyLookup(path, out_of_range="fallback")
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        energy = lookup.conv2d(2, 4, 8, kernel_size=1, stride=2, padding=0)
+
+    assert torch.isfinite(energy)
 
 
 def test_non_positive_measurement_is_rejected(tmp_path):

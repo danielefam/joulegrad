@@ -76,6 +76,9 @@ the measured range, and fills missing grid points from the nearest measured
 configuration before interpolation. `out_of_range="fallback"` applies the same
 fallbacks without warnings. Silent `"clamp"` and unchecked `"extrapolate"`
 modes are also available; both still reject required missing corners.
+For Conv2d, `"warn"` and `"fallback"` also select the nearest measured
+`(kernel_size, stride, padding)` configuration when the requested discrete
+configuration is absent. Warning mode reports the substitution explicitly.
 
 See [differentiable_energy_estimator.md](differentiable_energy_estimator.md)
 for the integration contract and [optimization.md](optimization.md) for the
