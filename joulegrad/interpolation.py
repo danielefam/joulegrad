@@ -1,5 +1,7 @@
 """Differentiable interpolation over measured rectilinear energy grids."""
 
+import warnings
+
 import torch
 
 
@@ -15,33 +17,40 @@ def _as_scalar(value, *, device, dtype):
 
 
 def _bracket(axis, coordinate, out_of_range):
-    if out_of_range not in {"clamp", "error", "extrapolate"}:
+    if out_of_range not in {"clamp", "error", "extrapolate", "warn"}:
         raise ValueError(f"Unknown out-of-range policy: {out_of_range}")
 
     if axis.numel() == 1:
-        if out_of_range != "clamp" and bool(
-            (coordinate.detach() != axis[0]).any().item()
-        ):
-            raise ValueError(
+        outside = bool((coordinate.detach() != axis[0]).any().item())
+        if outside:
+            message = (
                 "A coordinate cannot be interpolated from the only measured "
                 f"value {float(axis[0]):g}"
             )
+            if out_of_range == "warn":
+                warnings.warn(f"{message}; clamping", RuntimeWarning, stacklevel=3)
+            elif out_of_range != "clamp":
+                raise ValueError(message)
         index = torch.zeros_like(coordinate, dtype=torch.long)
         return index, index, torch.zeros_like(coordinate)
 
-    if out_of_range == "error":
+    if out_of_range in {"error", "warn"}:
         below = bool((coordinate.detach() < axis[0]).any().item())
         above = bool((coordinate.detach() > axis[-1]).any().item())
         if below or above:
-            raise ValueError(
-                f"A coordinate is outside [{float(axis[0]):g}, {float(axis[-1]):g}]"
+            message = (
+                f"A coordinate is outside "
+                f"[{float(axis[0]):g}, {float(axis[-1]):g}]"
             )
+            if out_of_range == "error":
+                raise ValueError(message)
+            warnings.warn(f"{message}; clamping", RuntimeWarning, stacklevel=3)
 
     lookup = coordinate.detach().clamp(axis[0], axis[-1])
     upper = torch.searchsorted(axis, lookup, right=True).clamp(1, axis.numel() - 1)
     lower = upper - 1
     interpolation_coordinate = coordinate
-    if out_of_range == "clamp":
+    if out_of_range in {"clamp", "warn"}:
         interpolation_coordinate = coordinate.clamp(axis[0], axis[-1])
     weight = (interpolation_coordinate - axis[lower]) / (axis[upper] - axis[lower])
     return lower, upper, weight
@@ -125,8 +134,14 @@ def multilinear_interpolate_batch(
             torch.where(use_upper, fraction.unsqueeze(1), 1 - fraction.unsqueeze(1))
         )
 
-    corner_values = values[tuple(indices)]
-    if validate_corners and bool(torch.isnan(corner_values).any().item()):
-        raise ValueError("The requested interpolation cell has missing measurements")
     weights = torch.stack(weight_factors, dim=2).prod(dim=2)
+    corner_values = values[tuple(indices)]
+    if validate_corners:
+        missing = torch.isnan(corner_values)
+        required_missing = missing & weights.detach().ne(0)
+        if bool(required_missing.any().item()):
+            raise ValueError("The requested interpolation cell has missing measurements")
+        corner_values = torch.where(
+            missing, torch.zeros_like(corner_values), corner_values
+        )
     return (corner_values * weights).sum(dim=1)

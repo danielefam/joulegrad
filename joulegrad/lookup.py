@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from pathlib import Path
+import warnings
 
 import pandas as pd
 import torch
@@ -21,9 +22,18 @@ class EnergyLookup:
 
     def __init__(self, path, *, out_of_range="error", dtype=torch.float64):
         self.path = Path(path)
-        if out_of_range not in {"clamp", "error", "extrapolate"}:
+        if out_of_range not in {
+            "clamp",
+            "error",
+            "extrapolate",
+            "fallback",
+            "warn",
+        }:
             raise ValueError(f"Unknown out-of-range policy: {out_of_range}")
         self.out_of_range = out_of_range
+        self._interpolation_policy = (
+            "clamp" if out_of_range == "fallback" else out_of_range
+        )
         self.dtype = dtype
         self.data = pd.read_csv(self.path)
         required = {"layer_type", "energy_mean_mJ"}
@@ -80,6 +90,20 @@ class EnergyLookup:
             complete=not bool(torch.isnan(values).any().item()),
         )
 
+    @staticmethod
+    def _fill_missing_from_nearest(grid):
+        missing = torch.isnan(grid.values)
+        missing_indices = missing.nonzero(as_tuple=False)
+        measured_indices = (~missing).nonzero(as_tuple=False)
+        distances = torch.cdist(
+            missing_indices.to(dtype=torch.float64),
+            measured_indices.to(dtype=torch.float64),
+        )
+        nearest_indices = measured_indices[distances.argmin(dim=1)]
+        values = grid.values.clone()
+        values[tuple(missing_indices.T)] = values[tuple(nearest_indices.T)]
+        return _PreparedGrid(axes=grid.axes, values=values, complete=True)
+
     def _prepare_grids(self):
         layer_types = self.data["layer_type"].astype(str).str.lower()
 
@@ -124,6 +148,25 @@ class EnergyLookup:
                     rows, ["sequence_length", "embed_dim", "head_dim"]
                 )
 
+        if self.out_of_range in {"fallback", "warn"}:
+            incomplete = {
+                key: grid for key, grid in self._grids.items() if not grid.complete
+            }
+            if incomplete:
+                missing_count = sum(
+                    int(torch.isnan(grid.values).sum().item())
+                    for grid in incomplete.values()
+                )
+                if self.out_of_range == "warn":
+                    warnings.warn(
+                        f"Lookup table has {missing_count} missing grid points; "
+                        "filling them from nearest measured configurations",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
+                for key, grid in incomplete.items():
+                    self._grids[key] = self._fill_missing_from_nearest(grid)
+
     def _grid_on_device(self, key, device):
         grid = self._grids.get(key)
         if grid is None:
@@ -158,7 +201,7 @@ class EnergyLookup:
             grid.axes,
             grid.values,
             tensor_coordinates,
-            out_of_range=self.out_of_range,
+            out_of_range=self._interpolation_policy,
             validate_corners=not grid.complete,
         )
 
@@ -185,7 +228,7 @@ class EnergyLookup:
             grid.axes,
             grid.values,
             coordinates,
-            out_of_range=self.out_of_range,
+            out_of_range=self._interpolation_policy,
             validate_corners=not grid.complete,
         )
 

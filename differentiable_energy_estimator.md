@@ -4,9 +4,13 @@
 
 Every lookup represents one board, batch size, runtime/software stack,
 acquisition setup, and inference definition. `EnergyLookup` loads the CSV once,
-caches device grids, reports mJ per inference, and uses
-`out_of_range="error"` for training. Missing interpolation corners and absent
-operator grids raise `ValueError`.
+caches device grids, and reports mJ per inference. Strict training uses
+`out_of_range="error"`, where missing interpolation corners and absent operator
+grids raise `ValueError`. `out_of_range="warn"` supports exploratory runs by
+warning before it clamps unsupported coordinates and fills missing grid points
+from the nearest measured configuration. These fallback values are estimates,
+not measurements. `out_of_range="fallback"` applies the same behavior without
+emitting warnings.
 
 JouleQuest, a private companion project, captures and processes the hardware
 measurements used to produce the summary CSVs:

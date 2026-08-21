@@ -70,8 +70,12 @@ The command supports `linear`, `conv`, and `attention` queries. Use
 `python -m joulegrad --help` to see all available arguments.
 
 Coordinates may be differentiable scalar tensors, so the result can be added
-to a loss. Missing interpolation corners and unsupported coordinates raise an
-error rather than yielding an invented value.
+to a loss. `out_of_range="error"` rejects missing interpolation corners and
+unsupported coordinates. `out_of_range="warn"` warns, clamps coordinates to
+the measured range, and fills missing grid points from the nearest measured
+configuration before interpolation. `out_of_range="fallback"` applies the same
+fallbacks without warnings. Silent `"clamp"` and unchecked `"extrapolate"`
+modes are also available; both still reject required missing corners.
 
 See [differentiable_energy_estimator.md](differentiable_energy_estimator.md)
 for the integration contract and [optimization.md](optimization.md) for the

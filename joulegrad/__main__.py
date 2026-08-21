@@ -12,7 +12,7 @@ def build_parser():
     parser.add_argument("lookup", help="Generated energy lookup CSV")
     parser.add_argument(
         "--out-of-range",
-        choices=("error", "clamp", "extrapolate"),
+        choices=("error", "fallback", "warn", "clamp", "extrapolate"),
         default="error",
     )
     subparsers = parser.add_subparsers(dest="layer_type", required=True)
