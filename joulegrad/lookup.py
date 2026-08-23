@@ -26,14 +26,18 @@ class EnergyLookup:
             "clamp",
             "error",
             "extrapolate",
+            "extrapolate_fallback",
             "fallback",
             "warn",
         }:
             raise ValueError(f"Unknown out-of-range policy: {out_of_range}")
         self.out_of_range = out_of_range
-        self._interpolation_policy = (
-            "clamp" if out_of_range == "fallback" else out_of_range
-        )
+        if out_of_range == "fallback":
+            self._interpolation_policy = "clamp"
+        elif out_of_range == "extrapolate_fallback":
+            self._interpolation_policy = "extrapolate"
+        else:
+            self._interpolation_policy = out_of_range
         self.dtype = dtype
         self.data = pd.read_csv(self.path)
         required = {"layer_type", "energy_mean_mJ"}
@@ -149,7 +153,7 @@ class EnergyLookup:
                     rows, ["sequence_length", "embed_dim", "head_dim"]
                 )
 
-        if self.out_of_range in {"fallback", "warn"}:
+        if self.out_of_range in {"extrapolate_fallback", "fallback", "warn"}:
             incomplete = {
                 key: grid for key, grid in self._grids.items() if not grid.complete
             }
@@ -171,7 +175,11 @@ class EnergyLookup:
     def _resolve_grid_key(self, key):
         if key in self._grids:
             return key
-        if key[0] != "conv" or self.out_of_range not in {"fallback", "warn"}:
+        if key[0] != "conv" or self.out_of_range not in {
+            "extrapolate_fallback",
+            "fallback",
+            "warn",
+        }:
             return key
 
         resolved = self._configuration_fallbacks.get(key)

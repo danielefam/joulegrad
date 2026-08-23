@@ -117,6 +117,19 @@ def test_fallback_policy_clamps_and_fills_without_warnings(tmp_path):
     assert input_features.grad.item() == pytest.approx(0.0)
 
 
+def test_extrapolate_fallback_fills_missing_points_and_keeps_gradient(tmp_path):
+    path = tmp_path / "lookup.csv"
+    _write_linear_lookup(path, omit=(4, 4))
+    input_features = torch.tensor(1.0, requires_grad=True)
+
+    lookup = EnergyLookup(path, out_of_range="extrapolate_fallback")
+    energy = lookup.linear(input_features, 3)
+    energy.backward()
+
+    assert torch.isfinite(energy)
+    assert input_features.grad.item() != pytest.approx(0.0)
+
+
 def test_missing_conv_configuration_fails_in_strict_mode(tmp_path):
     path = tmp_path / "lookup.csv"
     _write_conv_lookup(path)
