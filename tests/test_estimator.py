@@ -4,8 +4,9 @@ import warnings
 import pandas as pd
 import pytest
 import torch
+from torch import nn
 
-from joulegrad import EnergyLookup
+from joulegrad import EnergyEstimator, EnergyLookup, ModelEnergyRegularizer
 
 
 def _write_linear_lookup(path, *, omit=None):
@@ -40,6 +41,28 @@ def _write_conv_lookup(path):
             }
         )
     pd.DataFrame(rows).to_csv(path, index=False)
+
+
+def test_energy_estimator_is_primary_model_api(tmp_path):
+    path = tmp_path / "lookup.csv"
+    _write_linear_lookup(path)
+    estimator = EnergyEstimator(path)
+    model = nn.Sequential(nn.Linear(2, 4))
+    output_mask = torch.full((4,), 0.75, requires_grad=True)
+
+    prepared = estimator.prepare_model(model, module_names=("0",))
+    result = estimator.estimate_model(
+        model,
+        module_names=("0",),
+        masks={"0": output_mask},
+    )
+    result["total_energy_mJ"].backward()
+
+    assert EnergyLookup is EnergyEstimator
+    assert isinstance(prepared, ModelEnergyRegularizer)
+    assert prepared.lookup is estimator
+    assert result["total_energy_mJ"].item() == pytest.approx(8.0)
+    assert torch.allclose(output_mask.grad, torch.full((4,), 2.0))
 
 
 def test_linear_interpolation_keeps_mask_gradient(tmp_path):

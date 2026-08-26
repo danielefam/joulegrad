@@ -1,85 +1,76 @@
-# joulegrad
+# JouleGrad
 
-This package provides differentiable, measured energy estimates for Linear,
-Conv2d, Attention, and RotaryAttention operations. It turns one processed
-hardware-measurement summary into a lookup table and evaluates that table in a
-training loss.
+JouleGrad is an independent Python library for differentiable energy
+estimation. It consumes a measured energy lookup CSV and returns PyTorch
+tensors in millijoules per inference.
 
-The initial idea was inspired by
-[aissa0803/energy_estimator](https://github.com/aissa0803/energy_estimator). The
-implementation was substantially rewritten for JouleQuest and is maintained
-here with additional strict validation for Ecological NAS.
+It does not collect measurements, create lookup tables, provide a command-line
+interface, or depend on a specific pruning or optimization project.
 
-## Performance implementation
-
-The current implementation includes the JouleQuest optimization work:
-
-- lookup grids are prepared once from the CSV rather than rebuilt per query;
-- prepared tensors are cached once per device;
-- interpolation corners are computed with vectorized PyTorch operations;
-- Linear, Conv2d, and attention queries have batched APIs; and
-- `ModelEnergyRegularizer` scans the model once and batches compatible
-  operators on each training step.
-
-These optimizations are additive to this project's stricter measurement
-policy: lookup rows must have positive energy, and the builder accepts only
-complete measurements whose quality status is `OK` or `REVIEW`, with matching
-cycle and clock checks when those fields are present.
-
-## Workflow
-
-JouleQuest, a private companion project, captures and processes the hardware
-measurements used by this estimator:
-[github.com/danielefam/joulequest](https://github.com/danielefam/joulequest).
-
-Place one processed summary CSV per board and runtime configuration in a
-directory of your choice, then build a separate lookup for each summary:
+## Installation
 
 ```bash
-python -m joulegrad.build_energy_lookup_table \
-  measurements/summaries/pi5_summary.csv \
-  --output measurements/pi5_energy_lookup.csv
+python -m pip install -e .
 ```
 
-Load it in Python with strict out-of-range behavior:
+Runtime dependencies are only PyTorch and pandas.
+
+## Layer API
 
 ```python
-from joulegrad import EnergyLookup
+import torch
+from joulegrad import EnergyEstimator
 
-lookup = EnergyLookup("measurements/pi5_energy_lookup.csv", out_of_range="error")
-energy_mj = lookup.linear(64, 128)
+estimator = EnergyEstimator("energy_lookup_table.csv", out_of_range="error")
+
+active_outputs = torch.tensor(96.0, requires_grad=True)
+energy_mj = estimator.linear(128, active_outputs)
+energy_mj.backward()
+print(float(energy_mj), active_outputs.grad)
 ```
 
-You can also query a lookup table directly from the terminal. Run the command
-in an environment where JouleGrad's dependencies, including PyTorch, are
-installed:
+`linear`, `conv2d`, and `attention` queries support differentiable scalar
+coordinates and vectorized `*_batch` forms.
+
+## Model API
+
+```python
+prepared = estimator.prepare_model(
+    model,
+    input_shapes={"features.0": (1, 3, 32, 32)},
+    module_names=("features.0", "classifier"),
+)
+
+energy_mj = prepared(masks)
+details = prepared.estimate(masks)
+```
+
+For one-off diagnostics, use `estimator.estimate_model(...)`.
+
+## Lookup input
+
+JouleGrad reads the current JouleQuest `energy_lookup_table.csv` schema. A
+lookup represents one hardware and software configuration and contains
+accepted aggregate layer measurements. JouleGrad validates and interpolates
+the table but does not know how it was produced.
+
+See:
+
+- [Python API](docs/API.md)
+- [Lookup schema](docs/LOOKUP_SCHEMA.md)
+- [Interpolation](docs/INTERPOLATION.md)
+- [Out-of-range policy evolution](docs/OUT_OF_RANGE_POLICIES.md)
+- [Migration from energy_estimator](docs/MIGRATION_FROM_ENERGY_ESTIMATOR.md)
+
+## Compatibility
+
+`EnergyLookup` is an identity alias for `EnergyEstimator`. The
+`ModelEnergyRegularizer`, `estimate_model_energy`, and
+`multilinear_interpolate` APIs remain available.
+
+## Tests
 
 ```bash
-conda run -n banera_pt python -m joulegrad \
-  measurements/pi5_energy_lookup.csv \
-  linear 130 162
+PYTHONDONTWRITEBYTECODE=1 \
+  python -m pytest -q -W error -p no:cacheprovider
 ```
-
-This prints the estimated energy per inference:
-
-```text
-0.128964165565 mJ/inference
-```
-
-The command supports `linear`, `conv`, and `attention` queries. Use
-`python -m joulegrad --help` to see all available arguments.
-
-Coordinates may be differentiable scalar tensors, so the result can be added
-to a loss. `out_of_range="error"` rejects missing interpolation corners and
-unsupported coordinates. `out_of_range="warn"` warns, clamps coordinates to
-the measured range, and fills missing grid points from the nearest measured
-configuration before interpolation. `out_of_range="fallback"` applies the same
-fallbacks without warnings. Silent `"clamp"` and unchecked `"extrapolate"`
-modes are also available; both still reject required missing corners.
-For Conv2d, `"warn"` and `"fallback"` also select the nearest measured
-`(kernel_size, stride, padding)` configuration when the requested discrete
-configuration is absent. Warning mode reports the substitution explicitly.
-
-See [differentiable_energy_estimator.md](differentiable_energy_estimator.md)
-for the integration contract and [optimization.md](optimization.md) for the
-performance design and constraints.

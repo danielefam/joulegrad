@@ -17,7 +17,7 @@ class _PreparedGrid:
     complete: bool
 
 
-class EnergyLookup:
+class EnergyEstimator:
     """Estimate per-inference energy in mJ from one generated lookup CSV."""
 
     def __init__(self, path, *, out_of_range="error", dtype=torch.float64):
@@ -347,3 +347,45 @@ class EnergyLookup:
         return self._estimate_batch(
             (layer_type,), [sequence_length, embed_dim, head_dim]
         )
+
+    def prepare_model(
+        self,
+        model,
+        *,
+        input_shapes=None,
+        module_names=None,
+        skip_unsupported=False,
+    ):
+        """Prepare a reusable model-level estimator over selected modules."""
+
+        from .model import ModelEnergyRegularizer
+
+        return ModelEnergyRegularizer(
+            model,
+            self,
+            input_shapes=input_shapes,
+            module_names=module_names,
+            skip_unsupported=skip_unsupported,
+        )
+
+    def estimate_model(
+        self,
+        model,
+        *,
+        masks=None,
+        input_shapes=None,
+        module_names=None,
+        skip_unsupported=False,
+    ):
+        """Return total and per-layer estimates for one model."""
+
+        prepared = self.prepare_model(
+            model,
+            input_shapes=input_shapes,
+            module_names=module_names,
+            skip_unsupported=skip_unsupported,
+        )
+        return prepared.estimate(masks)
+
+
+EnergyLookup = EnergyEstimator

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 
-from .lookup import EnergyLookup
+from .lookup import EnergyEstimator
 
 
 @dataclass(frozen=True)
@@ -73,7 +73,7 @@ def _stack_scalars(values, *, device, dtype):
 
 
 class ModelEnergyRegularizer(nn.Module):
-    """Prepared generic regularizer; explicit NAS bridges should pass names."""
+    """Prepared model estimator over explicitly selected module names."""
 
     def __init__(
         self,
@@ -85,7 +85,11 @@ class ModelEnergyRegularizer(nn.Module):
         skip_unsupported=False,
     ):
         super().__init__()
-        self.lookup = lookup if isinstance(lookup, EnergyLookup) else EnergyLookup(lookup)
+        self.lookup = (
+            lookup
+            if isinstance(lookup, EnergyEstimator)
+            else EnergyEstimator(lookup)
+        )
         self.skip_unsupported = skip_unsupported
         input_shapes = {} if input_shapes is None else input_shapes
         selected = None if module_names is None else set(module_names)

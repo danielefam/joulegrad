@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "joulegrad"
-version = "0.1.0"
-description = "Differentiable per-layer energy estimates from processed hardware measurement lookup tables"
+version = "0.2.0"
+description = "API-only differentiable energy estimates from hardware lookup tables"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
