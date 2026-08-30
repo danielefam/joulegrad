@@ -21,9 +21,9 @@ Lookup grids are built once and cached per device. Batched query methods group
 compatible coordinates into one vectorized interpolation call.
 
 Clamping can produce zero gradient outside the measured interval. Missing
-corners fail in strict mode; fallback policies may fill missing points with the
-nearest measured grid value. These policies are approximations and should be
-chosen explicitly by the caller.
+corners fail under `error`; `warn`, `clamp`, and `extrapolate` fill missing
+points with the nearest measured grid value. These substitutions are
+approximations and should be chosen explicitly by the caller.
 
 See [Out-of-range policy evolution](OUT_OF_RANGE_POLICIES.md) for the exact
 behavior matrix and the difference from the original estimator's silent edge

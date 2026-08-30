@@ -79,9 +79,9 @@ measurement if that region must be modeled.
 Consequences in JouleGrad:
 
 - `error` rejects a zero width when zero is outside the measured axis;
-- `clamp`, `warn`, and `fallback` use the smallest measured width;
-- `extrapolate` and `extrapolate_fallback` extend the first measured cell toward
-  zero, which may be inaccurate or even non-physical.
+- `clamp` and `warn` use the smallest measured width;
+- `extrapolate` extends the first measured cell toward zero, which may be
+   inaccurate or even non-physical.
 
 ## 3. Other limitations of the original behavior
 
@@ -191,62 +191,50 @@ measured. JouleGrad distinguishes two problems:
 
 ### Missing grid points
 
-For `warn`, `fallback`, and `extrapolate_fallback`, missing values are filled
-once when the estimator is constructed. Each missing tensor cell takes the
-value of the nearest measured cell using Euclidean distance in grid-index
-space.
+For `warn`, `clamp`, and `extrapolate`, missing values are filled once when the
+estimator is constructed. Each missing tensor cell takes the value of the
+nearest measured cell using Euclidean distance in grid-index space.
 
 This makes interpolation possible but does not create a real measurement.
 `warn` reports how many points were filled.
 
-For `error`, `clamp`, and `extrapolate`, grids remain incomplete. A query fails
-only when a missing corner has nonzero interpolation weight. Therefore an exact
-measured point can succeed even if an adjacent, zero-weight corner is absent.
-This is more precise than the old all-four-corners check.
+For `error`, grids remain incomplete. A query fails only when a missing corner
+has nonzero interpolation weight. Therefore an exact measured point can
+succeed even if an adjacent, zero-weight corner is absent. This is more precise
+than the old all-four-corners check.
 
 ### Missing Conv2d configuration
 
-For `warn`, `fallback`, and `extrapolate_fallback`, JouleGrad selects the
-available configuration minimizing squared distance over numeric
-`(kernel_size, stride, padding)` values. `warn` reports the substitution.
+For `warn`, `clamp`, and `extrapolate`, JouleGrad selects the available
+configuration minimizing squared distance over numeric `(kernel_size, stride,
+padding)` values. `warn` reports the substitution.
 
-Other policies require the exact configuration.
+`error` requires the exact configuration.
 
-## 8. Silent fallback policies
+## 8. Four policies
 
-### `fallback`
+The public policy set is intentionally limited to four names:
 
-`fallback` combines:
+- `error` fails on unsupported coordinates, required missing corners, and
+   unavailable convolution configurations;
+- `warn` clamps coordinates, fills or substitutes sparse coverage, and emits
+   `RuntimeWarning` messages;
+- `clamp` performs the same bounded approximations silently;
+- `extrapolate` preserves the original estimator's edge-cell extrapolation and
+   gradients while silently filling or substituting sparse coverage.
 
-- coordinate clamping;
-- nearest-value filling for missing grid points; and
-- nearest discrete Conv2d configuration substitution.
-
-It emits no warnings. Gradients outside a clamped axis are zero.
-
-### `extrapolate_fallback`
-
-`extrapolate_fallback` combines:
-
-- edge-cell linear extrapolation;
-- nearest-value filling for missing grid points; and
-- nearest discrete Conv2d configuration substitution.
-
-It emits no warnings and preserves coordinate gradients beyond measured axes.
-It is the closest current policy to the old estimator's implicit extrapolation,
-but with added support for incomplete CSV grids and missing convolution
-configurations.
+The sparse-grid support is folded into the three continuing policies because
+it is required to apply their coordinate behavior to current JouleQuest data.
+The former `fallback` and `extrapolate_fallback` names are no longer accepted.
 
 ## 9. Policy matrix
 
 | Policy | Outside measured axis | Warning | Missing grid point | Missing Conv config | Outside gradient |
 | --- | --- | --- | --- | --- | --- |
 | `error` | fail | no | fail if required | fail | n/a |
-| `clamp` | boundary value | no | fail if required | fail | zero |
 | `warn` | boundary value | yes | nearest fill | nearest substitute | zero |
-| `fallback` | boundary value | no | nearest fill | nearest substitute | zero |
-| `extrapolate` | linear edge extension | no | fail if required | fail | retained |
-| `extrapolate_fallback` | linear edge extension | no | nearest fill | nearest substitute | retained |
+| `clamp` | boundary value | no | nearest fill | nearest substitute | zero |
+| `extrapolate` | linear edge extension | no | nearest fill | nearest substitute | retained |
 
 For an axis containing only one measured value, extrapolation is undefined.
 JouleGrad allows exact use of that coordinate, allows clamping, warns and clamps
@@ -264,15 +252,15 @@ coordinate and configuration is covered.
 Use `warn`. Save warnings with experiment logs and treat them as part of the
 result provenance.
 
-### Development where warnings are intentionally suppressed
+### Bounded approximation without warnings
 
-Use `fallback`, but document that coordinate gradients become zero beyond
-measured boundaries.
+Use `clamp`, but document that coordinate gradients become zero beyond measured
+boundaries and that sparse points may be substituted.
 
 ### Deliberate extrapolation study
 
-Use `extrapolate` or `extrapolate_fallback`, and validate extrapolated values
-against later hardware measurements.
+Use `extrapolate`, and validate extrapolated and substituted values against
+later hardware measurements.
 
 ## 11. Evolution summary
 
@@ -285,8 +273,8 @@ The progression was:
 3. **Named clamp/extrapolate behavior:** separate bounded estimates from linear
    edge continuation.
 4. **Warning mode:** make approximations visible without stopping experiments.
-5. **Fallback modes:** support sparse JouleQuest CSV grids and unavailable
-   discrete convolution configurations.
+5. **Sparse-grid support:** let warning, clamping, and extrapolation modes work
+   with incomplete JouleQuest grids and unavailable discrete configurations.
 6. **Vectorized multilinear implementation:** extend the same semantics to
    Linear, Conv2d, Attention, and batched differentiable queries.
 

@@ -45,6 +45,9 @@ therefore silently extrapolated beyond measured axes. It also inserted a
 synthetic zero row/column into bundled tables.
 
 JouleGrad does not make either behavior implicit. Its default `error` policy
-fails outside measured coverage, while named clamp, warning, fallback, and
-extrapolation policies let the caller choose the approximation deliberately.
+fails outside measured coverage, while named clamp, warning, and extrapolation
+policies let the caller choose the approximation deliberately. The old
+estimator also rejected `NaN` interpolation corners; its bundled,
+two-dimensional, layer-specific tables simply did not expose the sparse
+spatial-axis gaps found in current JouleQuest convolution grids.
 See [Out-of-range policy evolution](OUT_OF_RANGE_POLICIES.md).

@@ -22,22 +22,10 @@ class EnergyEstimator:
 
     def __init__(self, path, *, out_of_range="error", dtype=torch.float64):
         self.path = Path(path)
-        if out_of_range not in {
-            "clamp",
-            "error",
-            "extrapolate",
-            "extrapolate_fallback",
-            "fallback",
-            "warn",
-        }:
+        if out_of_range not in {"clamp", "error", "extrapolate", "warn"}:
             raise ValueError(f"Unknown out-of-range policy: {out_of_range}")
         self.out_of_range = out_of_range
-        if out_of_range == "fallback":
-            self._interpolation_policy = "clamp"
-        elif out_of_range == "extrapolate_fallback":
-            self._interpolation_policy = "extrapolate"
-        else:
-            self._interpolation_policy = out_of_range
+        self._interpolation_policy = out_of_range
         self.dtype = dtype
         self.data = pd.read_csv(self.path)
         required = {"layer_type", "energy_mean_mJ"}
@@ -153,7 +141,7 @@ class EnergyEstimator:
                     rows, ["sequence_length", "embed_dim", "head_dim"]
                 )
 
-        if self.out_of_range in {"extrapolate_fallback", "fallback", "warn"}:
+        if self.out_of_range != "error":
             incomplete = {
                 key: grid for key, grid in self._grids.items() if not grid.complete
             }
@@ -175,11 +163,7 @@ class EnergyEstimator:
     def _resolve_grid_key(self, key):
         if key in self._grids:
             return key
-        if key[0] != "conv" or self.out_of_range not in {
-            "extrapolate_fallback",
-            "fallback",
-            "warn",
-        }:
+        if key[0] != "conv" or self.out_of_range == "error":
             return key
 
         resolved = self._configuration_fallbacks.get(key)

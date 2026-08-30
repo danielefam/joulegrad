@@ -84,7 +84,7 @@ policy are documented in
 - `error`: reject unsupported coordinates or missing required corners.
 - `warn`: warn, clamp coordinates, fill missing points from the nearest
   measurement, and use the nearest measured convolution configuration.
-- `fallback`: apply the same fallbacks silently.
-- `clamp`: clamp coordinates but do not fill missing grids.
-- `extrapolate`: extrapolate from the nearest cell.
-- `extrapolate_fallback`: extrapolate and fill/substitute missing grids.
+- `clamp`: silently clamp coordinates, fill missing points from the nearest
+    measurement, and use the nearest measured convolution configuration.
+- `extrapolate`: silently extrapolate from the nearest edge cell, filling
+    missing points and substituting the nearest convolution configuration.

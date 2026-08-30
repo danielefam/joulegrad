@@ -125,14 +125,14 @@ def test_warn_policy_fills_missing_grid_points_from_nearest_measurement(tmp_path
     assert torch.isfinite(input_features.grad)
 
 
-def test_fallback_policy_clamps_and_fills_without_warnings(tmp_path):
+def test_clamp_policy_clamps_and_fills_without_warnings(tmp_path):
     path = tmp_path / "lookup.csv"
     _write_linear_lookup(path, omit=(4, 4))
     input_features = torch.tensor(1.0, requires_grad=True)
 
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        lookup = EnergyLookup(path, out_of_range="fallback")
+        lookup = EnergyLookup(path, out_of_range="clamp")
         energy = lookup.linear(input_features, 3)
     energy.backward()
 
@@ -140,12 +140,12 @@ def test_fallback_policy_clamps_and_fills_without_warnings(tmp_path):
     assert input_features.grad.item() == pytest.approx(0.0)
 
 
-def test_extrapolate_fallback_fills_missing_points_and_keeps_gradient(tmp_path):
+def test_extrapolate_fills_missing_points_and_keeps_gradient(tmp_path):
     path = tmp_path / "lookup.csv"
     _write_linear_lookup(path, omit=(4, 4))
     input_features = torch.tensor(1.0, requires_grad=True)
 
-    lookup = EnergyLookup(path, out_of_range="extrapolate_fallback")
+    lookup = EnergyLookup(path, out_of_range="extrapolate")
     energy = lookup.linear(input_features, 3)
     energy.backward()
 
@@ -178,16 +178,25 @@ def test_warn_policy_substitutes_nearest_conv_configuration(tmp_path):
     assert output_channels.grad.item() == pytest.approx(2.0)
 
 
-def test_fallback_policy_substitutes_conv_configuration_silently(tmp_path):
+def test_clamp_policy_substitutes_conv_configuration_silently(tmp_path):
     path = tmp_path / "lookup.csv"
     _write_conv_lookup(path)
-    lookup = EnergyLookup(path, out_of_range="fallback")
+    lookup = EnergyLookup(path, out_of_range="clamp")
 
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         energy = lookup.conv2d(2, 4, 8, kernel_size=1, stride=2, padding=0)
 
     assert torch.isfinite(energy)
+
+
+@pytest.mark.parametrize("policy", ("fallback", "extrapolate_fallback"))
+def test_removed_fallback_policies_are_rejected(tmp_path, policy):
+    path = tmp_path / "lookup.csv"
+    _write_linear_lookup(path)
+
+    with pytest.raises(ValueError, match="Unknown out-of-range policy"):
+        EnergyLookup(path, out_of_range=policy)
 
 
 def test_non_positive_measurement_is_rejected(tmp_path):
