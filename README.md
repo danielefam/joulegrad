@@ -59,6 +59,7 @@ See:
 - [Python API](docs/API.md)
 - [Lookup schema](docs/LOOKUP_SCHEMA.md)
 - [Interpolation](docs/INTERPOLATION.md)
+- [Performance architecture](docs/OPTIMIZATION.md)
 - [Out-of-range policy evolution](docs/OUT_OF_RANGE_POLICIES.md)
 - [Migration from energy_estimator](docs/MIGRATION_FROM_ENERGY_ESTIMATOR.md)
 

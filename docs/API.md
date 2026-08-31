@@ -14,6 +14,9 @@ estimator = EnergyEstimator("energy_lookup_table.csv", out_of_range="error")
 The constructor reads and prepares one CSV. Prepared grids are cached on each
 PyTorch device when first used.
 
+For training-loop integration and hot-path guidance, see
+[Performance architecture](OPTIMIZATION.md).
+
 Layer queries return scalar differentiable tensors in mJ per inference:
 
 ```python
