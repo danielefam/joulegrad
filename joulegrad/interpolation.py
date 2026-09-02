@@ -27,7 +27,7 @@ def _bracket(axis, coordinate, out_of_range):
                 "A coordinate cannot be interpolated from the only measured "
                 f"value {float(axis[0]):g}"
             )
-            if out_of_range == "warn":
+            if out_of_range in {"warn", "extrapolate"}:
                 warnings.warn(f"{message}; clamping", RuntimeWarning, stacklevel=3)
             elif out_of_range != "clamp":
                 raise ValueError(message)

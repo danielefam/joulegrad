@@ -237,8 +237,9 @@ The former `fallback` and `extrapolate_fallback` names are no longer accepted.
 | `extrapolate` | linear edge extension | no | nearest fill | nearest substitute | retained |
 
 For an axis containing only one measured value, extrapolation is undefined.
-JouleGrad allows exact use of that coordinate, allows clamping, warns and clamps
-under `warn`, and rejects incompatible strict/extrapolating queries.
+JouleGrad allows exact use of that coordinate, allows silent clamping under `clamp`,
+warns and clamps under `warn` and `extrapolate`, and rejects incompatible queries
+only under strict `error` mode.
 
 ## 10. How to choose a policy
 

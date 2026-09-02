@@ -153,6 +153,30 @@ def test_extrapolate_fills_missing_points_and_keeps_gradient(tmp_path):
     assert input_features.grad.item() != pytest.approx(0.0)
 
 
+def test_extrapolate_warns_and_clamps_on_single_value_axis(tmp_path):
+    path = tmp_path / "lookup.csv"
+    pd.DataFrame(
+        [
+            {
+                "layer_type": "conv",
+                "input_channels": 2,
+                "output_channels": 4,
+                "input_image_size": 8,
+                "kernel_size": 7,
+                "stride": 2,
+                "padding": 3,
+                "energy_mean_mJ": 10.0,
+            }
+        ]
+    ).to_csv(path, index=False)
+    lookup = EnergyLookup(path, out_of_range="extrapolate")
+
+    with pytest.warns(RuntimeWarning, match="only measured value"):
+        energy = lookup.conv2d(2, 4, 16, kernel_size=7, stride=2, padding=3)
+
+    assert energy.item() == pytest.approx(10.0)
+
+
 def test_missing_conv_configuration_fails_in_strict_mode(tmp_path):
     path = tmp_path / "lookup.csv"
     _write_conv_lookup(path)
